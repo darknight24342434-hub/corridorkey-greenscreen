@@ -1,0 +1,4 @@
+interface:
+  display_name: "CorridorKey Video Matting"
+  short_description: "Green-screen video alpha matting exports."
+  default_prompt: "Use $corridorkey-video-matting to remove the green screen from this video and create a short QC preview before full export."

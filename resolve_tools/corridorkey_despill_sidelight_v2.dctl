@@ -1,0 +1,52 @@
+// CorridorKey foreground cleanup v2 for DaVinci Resolve.
+// Stronger green-spill reduction with the same cool-white side light.
+
+__DEVICE__ float ck_clamp01(float v)
+{
+    return _fminf(_fmaxf(v, 0.0f), 1.0f);
+}
+
+__DEVICE__ float ck_smooth01(float v)
+{
+    v = ck_clamp01(v);
+    return v * v * (3.0f - 2.0f * v);
+}
+
+__DEVICE__ float3 transform(int width, int height, int x, int y, float r, float g, float b)
+{
+    float max_rb = _fmaxf(r, b);
+    float min_rb = _fminf(r, b);
+    float green_excess = g - max_rb;
+    float spill = ck_smooth01((green_excess - 0.004f) / 0.120f);
+
+    // Extra guard for semi-transparent green edges where both red and blue are low.
+    float edge_like = ck_smooth01((g - min_rb - 0.020f) / 0.180f);
+    spill = _fmaxf(spill, edge_like * 0.55f);
+
+    float neutral_g = max_rb * 0.90f + b * 0.10f;
+    g = g * (1.0f - spill * 0.98f) + neutral_g * (spill * 0.98f);
+    r += spill * 0.040f;
+    b += spill * 0.055f;
+
+    // Global foreground match: cool capsule light, less green bias.
+    r *= 1.022f;
+    g *= 0.952f;
+    b *= 1.038f;
+
+    float contrast = 1.025f;
+    r = (r - 0.5f) * contrast + 0.5f + 0.006f;
+    g = (g - 0.5f) * contrast + 0.5f + 0.000f;
+    b = (b - 0.5f) * contrast + 0.5f + 0.012f;
+
+    float nx = (float)x / (float)_fmaxf(width - 1, 1);
+    float ny = (float)y / (float)_fmaxf(height - 1, 1);
+    float side = ck_smooth01((nx - 0.56f) / 0.44f);
+    float upper = ck_clamp01(1.10f - ny);
+    float rim = side * upper * 0.120f;
+
+    r += rim * 0.60f;
+    g += rim * 0.70f;
+    b += rim * 1.00f;
+
+    return make_float3(ck_clamp01(r), ck_clamp01(g), ck_clamp01(b));
+}

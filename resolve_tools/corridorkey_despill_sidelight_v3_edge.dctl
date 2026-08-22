@@ -1,0 +1,56 @@
+// CorridorKey foreground cleanup v3 for DaVinci Resolve.
+// Strong edge despill for source-RGB-plus-alpha composites.
+
+__DEVICE__ float ck_clamp01(float v)
+{
+    return _fminf(_fmaxf(v, 0.0f), 1.0f);
+}
+
+__DEVICE__ float ck_smooth01(float v)
+{
+    v = ck_clamp01(v);
+    return v * v * (3.0f - 2.0f * v);
+}
+
+__DEVICE__ float3 transform(int width, int height, int x, int y, float r, float g, float b)
+{
+    float max_rb = _fmaxf(r, b);
+    float min_rb = _fminf(r, b);
+    float green_excess = g - max_rb;
+
+    float spill = ck_smooth01((green_excess + 0.010f) / 0.110f);
+    float edge_green = ck_smooth01((g - min_rb + 0.015f) / 0.170f);
+    spill = _fmaxf(spill, edge_green * 0.72f);
+
+    float strong_green = ck_smooth01((g - r * 1.03f) / 0.120f) *
+                         ck_smooth01((g - b * 1.02f) / 0.120f);
+    spill = _fmaxf(spill, strong_green);
+
+    float neutral_g = max_rb * 0.72f + b * 0.28f;
+    g = g * (1.0f - spill) + neutral_g * spill;
+    g = _fminf(g, max_rb * (1.0f - 0.20f * spill) + 0.010f);
+    r += spill * 0.070f;
+    b += spill * 0.090f;
+
+    // Cool capsule match.
+    r *= 1.018f;
+    g *= 0.940f;
+    b *= 1.042f;
+
+    float contrast = 1.020f;
+    r = (r - 0.5f) * contrast + 0.5f + 0.005f;
+    g = (g - 0.5f) * contrast + 0.5f - 0.001f;
+    b = (b - 0.5f) * contrast + 0.5f + 0.012f;
+
+    float nx = (float)x / (float)_fmaxf(width - 1, 1);
+    float ny = (float)y / (float)_fmaxf(height - 1, 1);
+    float side = ck_smooth01((nx - 0.56f) / 0.44f);
+    float upper = ck_clamp01(1.10f - ny);
+    float rim = side * upper * 0.115f;
+
+    r += rim * 0.58f;
+    g += rim * 0.68f;
+    b += rim * 1.00f;
+
+    return make_float3(ck_clamp01(r), ck_clamp01(g), ck_clamp01(b));
+}

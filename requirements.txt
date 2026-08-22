@@ -1,0 +1,9 @@
+# The matting pipeline. torch is the big one; install the build that matches your
+# CUDA version from https://pytorch.org rather than taking the default wheel.
+torch
+numpy
+opencv-python
+Pillow
+
+# Tests only
+pytest

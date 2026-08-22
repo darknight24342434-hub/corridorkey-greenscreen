@@ -1,0 +1,45 @@
+// CorridorKey foreground cleanup for DaVinci Resolve.
+// Reduces green spill, applies a cool-white capsule grade, and adds a subtle right-side rim light.
+
+__DEVICE__ float clamp01(float v)
+{
+    return _fminf(_fmaxf(v, 0.0f), 1.0f);
+}
+
+__DEVICE__ float smooth01(float v)
+{
+    v = clamp01(v);
+    return v * v * (3.0f - 2.0f * v);
+}
+
+__DEVICE__ float3 transform(int width, int height, int x, int y, float r, float g, float b)
+{
+    float max_rb = _fmaxf(r, b);
+    float spill = smooth01((g - max_rb - 0.018f) / 0.18f);
+
+    float neutral_g = max_rb * 0.96f + b * 0.04f;
+    g = g * (1.0f - spill * 0.82f) + neutral_g * (spill * 0.82f);
+    r += spill * 0.025f;
+    b += spill * 0.040f;
+
+    r *= 1.018f;
+    g *= 0.968f;
+    b *= 1.030f;
+
+    float contrast = 1.030f;
+    r = (r - 0.5f) * contrast + 0.5f + 0.006f;
+    g = (g - 0.5f) * contrast + 0.5f + 0.002f;
+    b = (b - 0.5f) * contrast + 0.5f + 0.010f;
+
+    float nx = (float)x / (float)_fmaxf(width - 1, 1);
+    float ny = (float)y / (float)_fmaxf(height - 1, 1);
+    float side = smooth01((nx - 0.58f) / 0.42f);
+    float upper = clamp01(1.10f - ny);
+    float rim = side * upper * 0.115f;
+
+    r += rim * 0.62f;
+    g += rim * 0.72f;
+    b += rim * 1.00f;
+
+    return make_float3(clamp01(r), clamp01(g), clamp01(b));
+}
