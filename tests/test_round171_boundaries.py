@@ -55,6 +55,9 @@ def test_clean_frame_dirs_recreates_only_known_frame_folders(tmp_path):
     stale.parent.mkdir(parents=True)
     stale.write_bytes(b"stale")
     keep.write_text("keep", encoding="utf-8")
+    # The directory must carry the tool's own marker, or clean_frame_dirs refuses
+    # to delete anything in it (see the round 1 / round 175 guard contracts).
+    (out_dir / module.OUTPUT_MARKER).touch()
 
     module.clean_frame_dirs(out_dir)
 

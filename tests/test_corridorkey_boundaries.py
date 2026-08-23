@@ -73,6 +73,9 @@ def test_clean_frame_dirs_recreates_known_output_subdirs(tmp_path):
     stale = out_dir / "rgba_frames" / "old.png"
     stale.parent.mkdir(parents=True)
     stale.write_bytes(b"stale")
+    # The directory must carry the tool's own marker, or clean_frame_dirs refuses
+    # to delete anything in it (see the round 1 / round 175 guard contracts).
+    (out_dir / module.OUTPUT_MARKER).touch()
 
     module.clean_frame_dirs(out_dir)
 

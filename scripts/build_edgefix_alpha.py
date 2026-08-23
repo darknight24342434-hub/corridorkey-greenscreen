@@ -142,6 +142,10 @@ def process(original: Path, alpha_mov: Path, output: Path) -> int:
     aw, ah, afps = media_info(alpha_mov)
     if (aw, ah) != (width, height):
         raise RuntimeError(f"Size mismatch: original {width}x{height}, alpha {aw}x{ah}")
+    if abs(afps - fps) > 0.01:
+        # Same size but a different rate means the two streams cannot be paired frame
+        # by frame; decoding them anyway would silently drift.
+        raise RuntimeError(f"FPS mismatch: original {fps:g} fps, alpha {afps:g} fps")
 
     rgb_size = width * height * 3
     rgba_size = width * height * 4
@@ -180,6 +184,13 @@ def process(original: Path, alpha_mov: Path, output: Path) -> int:
     code = encoder.wait()
     if code != 0:
         raise RuntimeError(f"encoder failed with code {code}\n{err[-2000:]}")
+    if frames == 0:
+        # Both decoders opened but neither produced a full frame. Returning 0 here
+        # would leave an empty output file that looks like a successful run.
+        raise RuntimeError(
+            f"No frames were decoded from {original} / {alpha_mov}; "
+            "check that both files decode and share the same frame size."
+        )
     return frames
 
 

@@ -225,9 +225,13 @@ def start_encoder(output: Path, width: int, height: int, fps: float) -> subproce
 
 def process(original: Path, base_alpha_mov: Path, output: Path, holdout_until: float | None = None) -> int:
     width, height, fps = media_info(original)
-    aw, ah, _ = media_info(base_alpha_mov)
+    aw, ah, afps = media_info(base_alpha_mov)
     if (aw, ah) != (width, height):
         raise RuntimeError(f"Size mismatch: original {width}x{height}, alpha {aw}x{ah}")
+    if abs(afps - fps) > 0.01:
+        # Same size but a different rate means the two streams cannot be paired frame
+        # by frame; decoding them anyway would silently drift.
+        raise RuntimeError(f"FPS mismatch: original {fps:g} fps, alpha {afps:g} fps")
 
     rgb_size = width * height * 3
     rgba_size = width * height * 4

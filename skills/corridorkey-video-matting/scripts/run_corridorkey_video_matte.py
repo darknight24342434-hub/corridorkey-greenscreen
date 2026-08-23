@@ -88,12 +88,47 @@ def write_rgba(path: Path, rgba: np.ndarray) -> None:
     write_png(path, bgra)
 
 
+FRAME_DIRS = ["rgba_frames", "qc_frames", "matte_frames", "hint_frames", "source_frames"]
+OUTPUT_MARKER = ".corridorkey_output"
+
+
+class UnsafeOutputDirectoryError(ValueError, RuntimeError):
+    """clean_frame_dirs was pointed at a directory this tool did not create.
+
+    It is both a bad argument (ValueError) and a refusal to act (RuntimeError), so
+    either style of handler catches it.
+    """
+
+
+def mark_output_dir(out_dir: Path) -> None:
+    (out_dir / OUTPUT_MARKER).write_text(
+        "Created by run_corridorkey_video_matte.py. The frame folders beside this file are\n"
+        "deleted and recreated on every run; do not keep anything else in them.\n",
+        encoding="utf-8",
+    )
+
+
 def clean_frame_dirs(out_dir: Path) -> None:
-    for child in ["rgba_frames", "qc_frames", "matte_frames", "hint_frames", "source_frames"]:
+    """Empty and recreate the five frame folders under out_dir.
+
+    This deletes directories, so it only proceeds when there is nothing to delete or
+    when the directory carries the marker this tool writes to every output folder it
+    owns. An unrelated directory that merely happens to contain an rgba_frames folder
+    is refused before anything is removed.
+    """
+    existing = [child for child in FRAME_DIRS if (out_dir / child).exists()]
+    if existing and not (out_dir / OUTPUT_MARKER).exists():
+        raise UnsafeOutputDirectoryError(
+            f"Refusing to delete {', '.join(existing)} under {out_dir}: it is not marked as a "
+            f"corridorkey output directory (no {OUTPUT_MARKER} file), so it may be outside this "
+            "tool's control. Point --output-dir at a fresh folder or at one this tool generated."
+        )
+    for child in FRAME_DIRS:
         path = out_dir / child
         if path.exists():
             shutil.rmtree(path)
         path.mkdir(parents=True, exist_ok=True)
+    mark_output_dir(out_dir)
 
 
 def run_ffmpeg(command: list[str], cwd: Path) -> None:
@@ -315,8 +350,13 @@ def main() -> int:
     if not args.keep_existing_frames:
         clean_frame_dirs(out_dir)
     else:
-        for child in ["rgba_frames", "qc_frames", "matte_frames", "hint_frames", "source_frames"]:
+        # Frame folders that already exist are kept as they are. We only claim the
+        # directory as ours (so a later run may clean it) when we created them.
+        pre_existing = [child for child in FRAME_DIRS if (out_dir / child).exists()]
+        for child in FRAME_DIRS:
             (out_dir / child).mkdir(parents=True, exist_ok=True)
+        if not pre_existing:
+            mark_output_dir(out_dir)
 
     cap = cv2.VideoCapture(str(src))
     if not cap.isOpened():

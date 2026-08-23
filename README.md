@@ -85,18 +85,23 @@ Install a despill shader by copying the `.dctl` into Resolve's LUT directory, th
 python -m pytest
 ```
 
-`pytest.ini` restricts collection to `tests/`, because `run_corridorkey_test.py` matches pytest's default `*_test.py` pattern despite being a runner script — importing it would pull in torch just to collect.
+50 tests, all passing. `pytest.ini` restricts collection to `tests/`, because `run_corridorkey_test.py` matches pytest's default `*_test.py` pattern despite being a runner script.
 
-**Half the suite fails, and always has: 22 pass, 28 fail.** As with the rest of this bench, the tests are written as contracts describing what the code *should* do, ahead of it doing so. The failures cluster around:
+**The tests need `torch` importable**, because the matting module imports it at the top and several tests monkeypatch `torch.cuda.is_available`. The CPU wheel is enough:
 
-- **Frame-directory safety** — `clean_frame_dirs` should refuse an untrusted output directory before deleting anything, and recreate only known subfolders.
-- **Encoder lifecycle** — stream encoders should report failures on close, terminate only running processes, and open with the expected dimensions and fps.
-- **Alpha-hint correctness** — the green-background mask should come back as a float mask, and low-saturation greenish grey should be read as foreground, not background.
-- **Node resolution** — a valid `COMFYUI_ROOT` should win, and a failure should report every path searched.
-- **Frame limits** — negative and fractional preview limits should be handled, and the smallest positive limit should win.
-- **Zero-frame guards** — the edge-fix pass should raise rather than proceed when the decoders produce no frames.
+```
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+```
 
-Two contracts that *did* fail — that the ffmpeg binary must not be hardcoded to a single Windows install — now pass, because the paths in this copy are configurable.
+Without it, 24 of the 50 fail at import time with `No module named 'torch'`, which looks like a broken suite and is only a missing dependency.
+
+The suite was written as contracts ahead of the implementation and half of it failed for a long time. The gaps it named are closed:
+
+- **Output-directory guard.** `clean_frame_dirs` deletes and recreates the five frame folders, so it now refuses to touch a directory that this tool did not create. A run writes a `.corridorkey_output` marker into its output folder; a directory that has frame folders but no marker is refused before anything is removed. A fresh, empty directory is always accepted.
+- **Frame-rate check.** Both alpha-rebuild scripts reject an alpha clip whose frame rate differs from the original, before any decoder starts. Same size but different rate would otherwise pair frames that silently drift apart.
+- **Zero-frame check.** A run where both decoders opened but neither produced a full frame now raises instead of returning `0` and leaving an empty output file that looks like success.
+
+These were checked against real ffmpeg output, not only against the mocks in the tests.
 
 ## Limitations
 
@@ -105,7 +110,7 @@ Two contracts that *did* fail — that the ffmpeg binary must not be hardcoded t
 - **GPU memory is the ceiling.** The original work resized everything to 720p to fit 8 GB; larger frames will need more.
 - **The Resolve half needs Resolve Studio** and drives it through its scripting API, so it cannot run headless or on a machine without a licence.
 - **The DCTL shaders are tuned by eye** against the specific test clips. Treat the constants as a starting point.
-- **Half the test suite fails**, as described above. Read it as a to-do list.
+- **The output-directory marker is a file, not a lock.** `.corridorkey_output` stops the tool from emptying a folder it did not create; it does not stop a person from deleting the marker or placing one by hand.
 
 ## License
 
