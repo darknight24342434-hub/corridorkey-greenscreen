@@ -1,6 +1,9 @@
 # CorridorKey Green-Screen Test Footage Sources
 
-Folder: this project directory.
+The clips themselves are **not distributed with this repository** — the originals run to
+hundreds of megabytes. Each entry below records where the footage came from and under what
+licence, so it can be fetched again from the source page; the local filenames are the ones
+the scripts expect once you have downloaded it.
 
 ## 1. Filming with the green screen
 
